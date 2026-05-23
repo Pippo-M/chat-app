@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Chat App</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.min.js"></script>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f0f2f5;display:flex;height:100vh;overflow:hidden}
+
+    /* ════ SIDEBAR ════ */
+    #sidebar{width:240px;background:#1a1a2e;color:white;display:flex;flex-direction:column;flex-shrink:0}
+    #sidebar-header{padding:16px;border-bottom:1px solid #2a2a4a}
+    #sidebar-header h2{font-size:16px;margin-bottom:2px}
+    #my-name-display{font-size:12px;color:#7eb8ff}
+    #sidebar-body{flex:1;overflow-y:auto;padding:8px}
+
+    .section-label{font-size:11px;color:#666;text-transform:uppercase;letter-spacing:.5px;padding:12px 8px 4px}
+
+    /* User item trong sidebar */
+    .user-item{
+      display:flex;align-items:center;gap:8px;
+      padding:8px 10px;border-radius:8px;cursor:pointer;
+      font-size:14px;transition:background .15s;position:relative
+    }
+    .user-item:hover{background:#2a2a4a}
+    .user-item.active{background:#0084ff}
+    .user-item .avatar{
+      width:32px;height:32px;border-radius:50%;
+      background:#0084ff;display:flex;align-items:center;justify-content:center;
+      font-size:13px;font-weight:600;flex-shrink:0
+    }
+    .user-item.active .avatar{background:rgba(255,255,255,0.3)}
+    .user-item .uname{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .user-item .badge{
+      background:#f44336;color:white;border-radius:10px;
+      font-size:11px;padding:1px 6px;font-weight:600;
+    }
+    .group-item{
+      display:flex;align-items:center;gap:8px;
+      padding:8px 10px;border-radius:8px;cursor:pointer;
+      font-size:14px;transition:background .15s;
+    }
+    .group-item:hover{background:#2a2a4a}
+    .group-item.active{background:#0084ff}
+    .group-icon{width:32px;height:32px;border-radius:50%;background:#6c3483;display:flex;align-items:center;justify-content:center;font-size:16px}
+
+    /* ════ MAIN ════ */
+    #main{flex:1;display:flex;flex-direction:column;min-width:0}
+
+    #chat-header{
+      background:white;padding:12px 20px;
+      border-bottom:1px solid #e8e8e8;
+      display:flex;align-items:center;gap:12px;flex-shrink:0
+    }
+    #chat-header .avatar-lg{
+      width:38px;height:38px;border-radius:50%;
+      background:#0084ff;display:flex;align-items:center;justify-content:center;
+      font-size:15px;font-weight:700;color:white
+    }
+    #chat-header .avatar-lg.group{background:#6c3483}
+    #header-info h3{font-size:15px;margin-bottom:1px}
+    #header-info span{font-size:12px;color:#999}
+    #status-dot{width:8px;height:8px;border-radius:50%;background:#ccc;margin-left:auto}
+    #status-dot.on{background:#4caf50}
+
+    #messages{
+      flex:1;overflow-y:auto;padding:16px 20px;
+      display:flex;flex-direction:column;gap:8px
+    }
+    .msg-wrap{display:flex;flex-direction:column;max-width:65%}
+    .msg-wrap.me{align-self:flex-end;align-items:flex-end}
+    .msg-wrap.other{align-self:flex-start;align-items:flex-start}
+    .msg-name{font-size:11px;color:#aaa;margin-bottom:2px;padding:0 4px}
+    .msg-bubble{padding:9px 14px;border-radius:18px;font-size:14px;line-height:1.5;word-break:break-word}
+    .me .msg-bubble{background:#0084ff;color:white;border-bottom-right-radius:4px}
+    .other .msg-bubble{background:white;color:#111;border-bottom-left-radius:4px;box-shadow:0 1px 2px rgba(0,0,0,.1)}
+    .msg-time{font-size:10px;color:#bbb;margin-top:2px;padding:0 4px}
+    .sys-msg{align-self:center;font-size:12px;color:#aaa;background:#ebebeb;padding:3px 12px;border-radius:12px}
+
+    #input-area{
+      background:white;padding:12px 16px;
+      border-top:1px solid #e8e8e8;
+      display:flex;gap:10px;align-items:center;flex-shrink:0
+    }
+    #msg-input{
+      flex:1;padding:10px 16px;border:1.5px solid #e0e0e0;
+      border-radius:22px;font-size:14px;outline:none;
+    }
+    #msg-input:focus{border-color:#0084ff}
+    #msg-input:disabled{background:#fafafa;cursor:not-allowed}
+    #send-btn{
+      width:40px;height:40px;border-radius:50%;border:none;
+      background:#0084ff;color:white;font-size:16px;cursor:pointer;flex-shrink:0
+    }
+    #send-btn:hover:not(:disabled){background:#006fd6}
+    #send-btn:disabled{background:#ccc;cursor:default}
+
+    /* ════ JOIN SCREEN ════ */
+    #join-screen{
+      position:fixed;inset:0;z-index:999;
+      background:rgba(0,0,0,.55);
+      display:flex;align-items:center;justify-content:center
+    }
+    #join-box{
+      background:white;border-radius:20px;
+      padding:40px;text-align:center;width:340px;
+      box-shadow:0 24px 64px rgba(0,0,0,.25)
+    }
+    #join-box h2{font-size:26px;margin-bottom:6px}
+    #join-box p{color:#888;font-size:14px;margin-bottom:28px}
+    #username-input{
+      width:100%;padding:12px 16px;
+      border:2px solid #e0e0e0;border-radius:12px;
+      font-size:16px;outline:none;margin-bottom:12px;
+    }
+    #username-input:focus{border-color:#0084ff}
+    #join-btn{
+      width:100%;padding:13px;background:#0084ff;color:white;
+      border:none;border-radius:12px;font-size:16px;
+      font-weight:600;cursor:pointer
+    }
+    #join-btn:hover{background:#006fd6}
+    #join-err{font-size:12px;color:#f44;margin-top:8px;min-height:16px}
+  </style>
+</head>
+<body>
+
+<!-- ── Join Screen ── -->
+<div id="join-screen">
+  <div id="join-box">
+    <h2>💬 Chat App</h2>
+    <p>Nhập tên để bắt đầu</p>
+    <input id="username-input" placeholder="Tên của bạn..."/>
+    <button id="join-btn">Vào chat →</button>
+    <div id="join-err"></div>
+  </div>
+</div>
+
+<!-- ── Sidebar ── -->
+<div id="sidebar">
+  <div id="sidebar-header">
+    <h2>Chat App</h2>
+    <div id="my-name-display"></div>
+  </div>
+  <div id="sidebar-body">
+    <div class="section-label">Kênh</div>
+    <div class="group-item active" id="group-tab" onclick="switchToGroup()">
+      <div class="group-icon">👥</div>
+      <span>Phòng chat chung</span>
+    </div>
+    <div class="section-label">Online (<span id="online-count">0</span>)</div>
+    <div id="user-list"></div>
+  </div>
+</div>
+
+<!-- ── Main ── -->
+<div id="main">
+  <div id="chat-header">
+    <div class="avatar-lg group" id="header-avatar">👥</div>
+    <div id="header-info">
+      <h3 id="header-name">Phòng chat chung</h3>
+      <span id="header-sub">Chat nhóm</span>
+    </div>
+    <div id="status-dot"></div>
+  </div>
+  <div id="messages"></div>
+  <div id="input-area">
+    <input id="msg-input" placeholder="Nhập tin nhắn..." disabled/>
+    <button id="send-btn" disabled>➤</button>
+  </div>
+</div>
+
+<script>
+const socket = io('http://localhost:3001', { transports: ['websocket','polling'] })
+
+// ── State ──
+let myName = ''
+let currentChat = { type: 'group', target: null } // type: 'group' | 'private'
+let unread = {}      // { username: count }
+let privateHistory = {} // { roomId: [msgs] } — cache trong RAM
+
+// ── DOM helpers ──
+const $ = id => document.getElementById(id)
+const msgContainer = $('messages')
+
+// ════════════════════════════════
+// KẾT NỐI
+// ════════════════════════════════
+socket.on('connect', () => {
+  $('status-dot').classList.add('on')
+})
+socket.on('disconnect', () => {
+  $('status-dot').classList.remove('on')
+})
+
+// ════════════════════════════════
+// JOIN
+// ════════════════════════════════
+function joinChat() {
+  const name = $('username-input').value.trim()
+  if (!name) { $('join-err').textContent = '⚠️ Nhập tên đi!'; return }
+  if (!socket.connected) { $('join-err').textContent = '❌ Chưa kết nối server'; return }
+
+  myName = name
+  $('my-name-display').textContent = '👤 ' + name
+  socket.emit('user:join', name)
+
+  $('join-screen').style.display = 'none'
+  $('msg-input').disabled = false
+  $('send-btn').disabled = false
+
+  // Load lịch sử group
+  loadGroupHistory()
+}
+$('join-btn').onclick = joinChat
+$('username-input').onkeydown = e => e.key === 'Enter' && joinChat()
+setTimeout(() => $('username-input').focus(), 100)
+
+// ════════════════════════════════
+// DANH SÁCH ONLINE
+// ════════════════════════════════
+socket.on('user:list', (users) => {
+  $('online-count').textContent = users.length
+  const others = users.filter(u => u !== myName)
+  $('user-list').innerHTML = others.map(u => {
+    const initials = u.slice(0,2).toUpperCase()
+    const cnt = unread[u] || 0
+    const isActive = currentChat.type === 'private' && currentChat.target === u
+    return `
+      <div class="user-item ${isActive ? 'active' : ''}" onclick="openPrivateChat('${u}')">
+        <div class="avatar">${initials}</div>
+        <span class="uname">${u}</span>
+        ${cnt > 0 && !isActive ? `<span class="badge">${cnt}</span>` : ''}
+      </div>`
+  }).join('')
+})
+
+// ════════════════════════════════
+// GROUP CHAT
+// ════════════════════════════════
+async function loadGroupHistory() {
+  try {
+    const res = await fetch('http://localhost:3001/history/group')
+    const msgs = await res.json()
+    msgs.forEach(m => renderMsg(m.from, m.text, m.time))
+    if (msgs.length) addSysMsg(`— ${msgs.length} tin nhắn cũ —`)
+  } catch {}
+}
+
+socket.on('message:receive', (msg) => {
+  if (currentChat.type === 'group') {
+    renderMsg(msg.from, msg.text, msg.time)
+  }
+  // Nếu đang ở private chat thì không hiện group msg
+})
+
+function sendGroupMsg() {
+  const text = $('msg-input').value.trim()
+  if (!text || !myName) return
+  socket.emit('message:send', { from: myName, text })
+  $('msg-input').value = ''
+}
+
+// ════════════════════════════════
+// PRIVATE CHAT 1:1
+// ════════════════════════════════
+function openPrivateChat(targetName) {
+  currentChat = { type: 'private', target: targetName }
+
+  // Cập nhật header
+  const initials = targetName.slice(0,2).toUpperCase()
+  $('header-avatar').textContent = initials
+  $('header-avatar').classList.remove('group')
+  $('header-name').textContent = targetName
+  $('header-sub').textContent = 'Tin nhắn riêng'
+
+  // Xoá unread badge
+  unread[targetName] = 0
+  refreshUserList()
+
+  // Xoá màn hình messages
+  msgContainer.innerHTML = ''
+
+  // Join room và lấy lịch sử
+  const roomId = privateRoomId(myName, targetName)
+  if (privateHistory[roomId]) {
+    // Đã có cache → render luôn
+    privateHistory[roomId].forEach(m => renderMsg(m.from, m.text, m.time))
+    if (privateHistory[roomId].length) addSysMsg('— Tin nhắn cũ —')
+  }
+  socket.emit('private:join', { myName, targetName })
+
+  // Đánh dấu active trên sidebar
+  refreshUserList()
+  $('group-tab').classList.remove('active')
+  $('msg-input').placeholder = `Nhắn tin cho ${targetName}...`
+}
+
+// Nhận lịch sử private từ server
+socket.on('private:history', ({ roomId, history }) => {
+  privateHistory[roomId] = history
+  // Chỉ render nếu đang mở đúng room này
+  const activeRoom = privateRoomId(myName, currentChat.target)
+  if (roomId === activeRoom) {
+    msgContainer.innerHTML = ''
+    history.forEach(m => renderMsg(m.from, m.text, m.time))
+    if (history.length) addSysMsg('— Tin nhắn cũ —')
+  }
+})
+
+// Nhận tin nhắn private
+socket.on('private:receive', ({ roomId, msg }) => {
+  // Cache
+  if (!privateHistory[roomId]) privateHistory[roomId] = []
+  privateHistory[roomId].push(msg)
+
+  const activeRoom = privateRoomId(myName, currentChat.target || '')
+  if (currentChat.type === 'private' && roomId === activeRoom) {
+    // Đang xem đúng room → render
+    renderMsg(msg.from, msg.text, msg.time)
+  } else {
+    // Đang ở chỗ khác → tăng unread
+    const otherPerson = msg.from === myName ? msg.to : msg.from
+    if (otherPerson !== myName) {
+      unread[otherPerson] = (unread[otherPerson] || 0) + 1
+      refreshUserList()
+    }
+  }
+})
+
+function sendPrivateMsg() {
+  const text = $('msg-input').value.trim()
+  if (!text || !myName || !currentChat.target) return
+  socket.emit('private:message', { from: myName, to: currentChat.target, text })
+  $('msg-input').value = ''
+}
+
+// ════════════════════════════════
+// SWITCH GROUP / PRIVATE
+// ════════════════════════════════
+function switchToGroup() {
+  currentChat = { type: 'group', target: null }
+  $('header-avatar').textContent = '👥'
+  $('header-avatar').classList.add('group')
+  $('header-name').textContent = 'Phòng chat chung'
+  $('header-sub').textContent = 'Chat nhóm'
+  $('msg-input').placeholder = 'Nhập tin nhắn...'
+  $('group-tab').classList.add('active')
+  msgContainer.innerHTML = ''
+  loadGroupHistory()
+  refreshUserList()
+}
+
+function refreshUserList() {
+  // Re-trigger user:list render bằng cách fake-emit qua state hiện tại
+  const items = document.querySelectorAll('.user-item')
+  items.forEach(el => {
+    const onclick = el.getAttribute('onclick')
+    const name = onclick.match(/'([^']+)'/)?.[1]
+    if (!name) return
+    const isActive = currentChat.type === 'private' && currentChat.target === name
+    el.classList.toggle('active', isActive)
+    if (isActive) $('group-tab').classList.remove('active')
+    const badge = el.querySelector('.badge')
+    const cnt = unread[name] || 0
+    if (cnt > 0 && !isActive) {
+      if (badge) badge.textContent = cnt
+      else el.insertAdjacentHTML('beforeend', `<span class="badge">${cnt}</span>`)
+    } else if (badge) badge.remove()
+  })
+}
+
+// ════════════════════════════════
+// GỬI TIN — dùng chung
+// ════════════════════════════════
+function sendMessage() {
+  if (currentChat.type === 'group') sendGroupMsg()
+  else sendPrivateMsg()
+}
+$('send-btn').onclick = sendMessage
+$('msg-input').onkeydown = e => e.key === 'Enter' && sendMessage()
+
+// ════════════════════════════════
+// RENDER TIN NHẮN
+// ════════════════════════════════
+function renderMsg(from, text, time) {
+  const isMe = from === myName
+  const wrap = document.createElement('div')
+  wrap.className = `msg-wrap ${isMe ? 'me' : 'other'}`
+  wrap.innerHTML = `
+    ${!isMe ? `<div class="msg-name">${from}</div>` : ''}
+    <div class="msg-bubble">${esc(text)}</div>
+    <div class="msg-time">${time}</div>
+  `
+  msgContainer.appendChild(wrap)
+  msgContainer.scrollTop = msgContainer.scrollHeight
+}
+
+function addSysMsg(text) {
+  const el = document.createElement('div')
+  el.className = 'sys-msg'
+  el.textContent = text
+  msgContainer.appendChild(el)
+  msgContainer.scrollTop = msgContainer.scrollHeight
+}
+
+function privateRoomId(a, b) {
+  return [a, b].sort().join('__')
+}
+
+function esc(t) {
+  return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+}
+</script>
+</body>
+</html>
