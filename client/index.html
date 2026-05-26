@@ -2,416 +2,444 @@
 <html lang="vi">
 <head>
   <meta charset="UTF-8"/>
-  <title>Chat App</title>
+  <title>Chat App MVP</title>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.min.js"></script>
   <style>
     *{box-sizing:border-box;margin:0;padding:0}
     body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f0f2f5;display:flex;height:100vh;overflow:hidden}
+    
+    /* ════ AUTH SCREEN & CSS CŨ GIỮ NGUYÊN ════ */
+    #auth-screen{ position:fixed;inset:0;z-index:999; background:linear-gradient(135deg,#1a1a2e 0%,#16213e 50%,#0f3460 100%); display:flex;align-items:center;justify-content:center; }
+    #auth-box{ background:white;border-radius:24px; padding:48px 40px;text-align:center;width:380px; box-shadow:0 32px 80px rgba(0,0,0,.35); }
+    #auth-box .logo{font-size:48px;margin-bottom:12px}
+    #auth-box h1{font-size:26px;font-weight:700;margin-bottom:6px;color:#111}
+    #auth-box .sub{color:#888;font-size:14px;margin-bottom:24px}
+    .btn-method { width:100%; padding:13px; margin-bottom:12px; border:1.5px solid #e0e0e0; border-radius:12px; background:white; font-size:15px; font-weight:500; cursor:pointer; color:#333; transition:0.2s; display:flex; align-items:center; justify-content:center; gap:10px; }
+    .btn-method:hover { background:#f8f8f8; border-color:#ccc; }
+    .google-icon{width:20px;height:20px}
+    .avatar-grid { display:flex; justify-content:center; gap:12px; flex-wrap:wrap; margin-bottom:16px; }
+    .avatar-opt { width:56px; height:56px; border-radius:50%; border:3px solid transparent; cursor:pointer; transition:0.2s; background:#f0f2f5; padding:4px; }
+    .avatar-opt:hover { transform:scale(1.1); }
+    .avatar-opt.selected { border-color:#0084ff; background:#e6f2ff; }
+    .auth-input{ flex:1; padding:12px 14px; border:1.5px solid #e0e0e0; border-radius:10px; font-size:15px; outline:none; }
+    .auth-input:focus{border-color:#0084ff}
+    .phone-input-wrap{ display:flex; gap:8px; margin-bottom:10px; }
+    .country-code{ width:72px; padding:12px 8px; border:1.5px solid #e0e0e0; border-radius:10px; font-size:15px; text-align:center; background:#fafafa; color:#555; flex-shrink:0; }
+    .btn-primary{ width:100%; padding:13px; background:#0084ff; color:white; border:none; border-radius:12px; font-size:15px; font-weight:600; cursor:pointer; transition:background .15s; }
+    .btn-primary:hover{background:#006fd6}
+    .btn-back{ background:none; border:none; color:#888; font-size:13px; cursor:pointer; margin-top:12px; text-decoration:underline; }
+    #auth-err{color:#e53935;font-size:13px;margin-top:10px;min-height:18px}
+    #recaptcha-container{margin:10px 0}
+    #auth-loading{ display:none; align-items:center; justify-content:center; gap:12px; padding:16px; color:#555; font-size:14px; }
+    .spinner{ width:22px; height:22px; border:3px solid #e0e0e0; border-top-color:#0084ff; border-radius:50%; animation:spin .8s linear infinite; }
+    @keyframes spin{to{transform:rotate(360deg)}}
 
-    /* ════ SIDEBAR ════ */
+    /* ════ MAIN APP ════ */
+    #app{display:none;width:100%;height:100vh;overflow:hidden}
+    #app.visible{display:flex}
     #sidebar{width:240px;background:#1a1a2e;color:white;display:flex;flex-direction:column;flex-shrink:0}
-    #sidebar-header{padding:16px;border-bottom:1px solid #2a2a4a}
-    #sidebar-header h2{font-size:16px;margin-bottom:2px}
-    #my-name-display{font-size:12px;color:#7eb8ff}
+    #sidebar-header{padding:14px 16px;border-bottom:1px solid #2a2a4a;display:flex;align-items:center;gap:10px}
+    #sidebar-header .my-avatar{ width:34px;height:34px;border-radius:50%; background:#0084ff;display:flex;align-items:center;justify-content:center; font-size:13px;font-weight:700;flex-shrink:0;overflow:hidden; }
+    #sidebar-header .my-avatar img{width:100%;height:100%;object-fit:cover;border-radius:50%}
+    #sidebar-header .my-info{flex:1;min-width:0}
+    #sidebar-header .my-info .name{font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    #sidebar-header .my-info .status{font-size:11px;color:#4caf50}
+    #btn-admin{display:none; background:none;border:none;cursor:pointer;font-size:18px;padding:4px;border-radius:6px; margin-right:4px;}
+    #btn-logout{background:none;border:none;color:#888;cursor:pointer;font-size:18px;padding:4px;border-radius:6px}
+    #btn-logout:hover{color:white;background:#333}
     #sidebar-body{flex:1;overflow-y:auto;padding:8px}
-
-    .section-label{font-size:11px;color:#666;text-transform:uppercase;letter-spacing:.5px;padding:12px 8px 4px}
-
-    /* User item trong sidebar */
-    .user-item{
-      display:flex;align-items:center;gap:8px;
-      padding:8px 10px;border-radius:8px;cursor:pointer;
-      font-size:14px;transition:background .15s;position:relative
-    }
-    .user-item:hover{background:#2a2a4a}
-    .user-item.active{background:#0084ff}
-    .user-item .avatar{
-      width:32px;height:32px;border-radius:50%;
-      background:#0084ff;display:flex;align-items:center;justify-content:center;
-      font-size:13px;font-weight:600;flex-shrink:0
-    }
-    .user-item.active .avatar{background:rgba(255,255,255,0.3)}
+    .section-label{font-size:11px;color:#555;text-transform:uppercase;letter-spacing:.5px;padding:12px 8px 4px}
+    .group-item,.user-item{ display:flex;align-items:center;gap:8px; padding:8px 10px;border-radius:8px;cursor:pointer; font-size:14px;transition:background .15s; }
+    .group-item:hover,.user-item:hover{background:#2a2a4a}
+    .group-item.active,.user-item.active{background:#0084ff}
+    .group-icon{width:32px;height:32px;border-radius:50%;background:#6c3483;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0}
+    .user-item .avatar{ width:32px;height:32px;border-radius:50%; background:#0084ff;display:flex;align-items:center;justify-content:center; font-size:12px;font-weight:700;flex-shrink:0;overflow:hidden; }
+    .user-item .avatar img{width:100%;height:100%;object-fit:cover;border-radius:50%}
     .user-item .uname{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-    .user-item .badge{
-      background:#f44336;color:white;border-radius:10px;
-      font-size:11px;padding:1px 6px;font-weight:600;
-    }
-    .group-item{
-      display:flex;align-items:center;gap:8px;
-      padding:8px 10px;border-radius:8px;cursor:pointer;
-      font-size:14px;transition:background .15s;
-    }
-    .group-item:hover{background:#2a2a4a}
-    .group-item.active{background:#0084ff}
-    .group-icon{width:32px;height:32px;border-radius:50%;background:#6c3483;display:flex;align-items:center;justify-content:center;font-size:16px}
+    .badge{background:#f44336;color:white;border-radius:10px;font-size:11px;padding:1px 6px;font-weight:700}
 
-    /* ════ MAIN ════ */
     #main{flex:1;display:flex;flex-direction:column;min-width:0}
-
-    #chat-header{
-      background:white;padding:12px 20px;
-      border-bottom:1px solid #e8e8e8;
-      display:flex;align-items:center;gap:12px;flex-shrink:0
-    }
-    #chat-header .avatar-lg{
-      width:38px;height:38px;border-radius:50%;
-      background:#0084ff;display:flex;align-items:center;justify-content:center;
-      font-size:15px;font-weight:700;color:white
-    }
-    #chat-header .avatar-lg.group{background:#6c3483}
-    #header-info h3{font-size:15px;margin-bottom:1px}
+    #chat-header{ background:white;padding:12px 20px; border-bottom:1px solid #e8e8e8; display:flex;align-items:center;gap:12px;flex-shrink:0; }
+    #header-avatar{width:38px;height:38px;border-radius:50%;background:#6c3483;display:flex;align-items:center;justify-content:center;font-size:16px;color:white;flex-shrink:0}
+    #header-avatar img {width:100%;height:100%;object-fit:cover;border-radius:50%}
+    #header-info h3{font-size:15px;font-weight:600;margin-bottom:1px}
     #header-info span{font-size:12px;color:#999}
-    #status-dot{width:8px;height:8px;border-radius:50%;background:#ccc;margin-left:auto}
+    #status-dot{width:8px;height:8px;border-radius:50%;background:#ccc;margin-left:auto;flex-shrink:0}
     #status-dot.on{background:#4caf50}
-
-    #messages{
-      flex:1;overflow-y:auto;padding:16px 20px;
-      display:flex;flex-direction:column;gap:8px
-    }
+    
+    #messages{flex:1;overflow-y:auto;padding:16px 20px;display:flex;flex-direction:column;gap:8px}
     .msg-wrap{display:flex;flex-direction:column;max-width:65%}
     .msg-wrap.me{align-self:flex-end;align-items:flex-end}
     .msg-wrap.other{align-self:flex-start;align-items:flex-start}
-    .msg-name{font-size:11px;color:#aaa;margin-bottom:2px;padding:0 4px}
+    .msg-sender{display:flex;align-items:center;gap:6px;margin-bottom:3px}
+    .msg-sender .sm-avatar{width:22px;height:22px;border-radius:50%;background:#0084ff;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:white;overflow:hidden;flex-shrink:0}
+    .msg-sender .sm-avatar img{width:100%;height:100%;object-fit:cover;border-radius:50%}
+    .msg-name{font-size:11px;color:#aaa}
     .msg-bubble{padding:9px 14px;border-radius:18px;font-size:14px;line-height:1.5;word-break:break-word}
     .me .msg-bubble{background:#0084ff;color:white;border-bottom-right-radius:4px}
     .other .msg-bubble{background:white;color:#111;border-bottom-left-radius:4px;box-shadow:0 1px 2px rgba(0,0,0,.1)}
     .msg-time{font-size:10px;color:#bbb;margin-top:2px;padding:0 4px}
     .sys-msg{align-self:center;font-size:12px;color:#aaa;background:#ebebeb;padding:3px 12px;border-radius:12px}
-
-    #input-area{
-      background:white;padding:12px 16px;
-      border-top:1px solid #e8e8e8;
-      display:flex;gap:10px;align-items:center;flex-shrink:0
-    }
-    #msg-input{
-      flex:1;padding:10px 16px;border:1.5px solid #e0e0e0;
-      border-radius:22px;font-size:14px;outline:none;
-    }
+    
+    #input-area{ background:white;padding:12px 16px; border-top:1px solid #e8e8e8; display:flex;gap:10px;align-items:center;flex-shrink:0; }
+    #btn-image { width: 40px; height: 40px; border-radius: 50%; border: none; background: #f0f2f5; font-size: 18px; cursor: pointer; flex-shrink: 0; transition: background 0.2s; }
+    #btn-image:hover { background: #e4e6eb; }
+    #msg-input{flex:1;padding:10px 16px;border:1.5px solid #e0e0e0;border-radius:22px;font-size:14px;outline:none}
     #msg-input:focus{border-color:#0084ff}
-    #msg-input:disabled{background:#fafafa;cursor:not-allowed}
-    #send-btn{
-      width:40px;height:40px;border-radius:50%;border:none;
-      background:#0084ff;color:white;font-size:16px;cursor:pointer;flex-shrink:0
-    }
-    #send-btn:hover:not(:disabled){background:#006fd6}
-    #send-btn:disabled{background:#ccc;cursor:default}
+    #send-btn{width:40px;height:40px;border-radius:50%;border:none;background:#0084ff;color:white;font-size:16px;cursor:pointer;flex-shrink:0}
+    #send-btn:hover{background:#006fd6}
 
-    /* ════ JOIN SCREEN ════ */
-    #join-screen{
-      position:fixed;inset:0;z-index:999;
-      background:rgba(0,0,0,.55);
-      display:flex;align-items:center;justify-content:center
-    }
-    #join-box{
-      background:white;border-radius:20px;
-      padding:40px;text-align:center;width:340px;
-      box-shadow:0 24px 64px rgba(0,0,0,.25)
-    }
-    #join-box h2{font-size:26px;margin-bottom:6px}
-    #join-box p{color:#888;font-size:14px;margin-bottom:28px}
-    #username-input{
-      width:100%;padding:12px 16px;
-      border:2px solid #e0e0e0;border-radius:12px;
-      font-size:16px;outline:none;margin-bottom:12px;
-    }
-    #username-input:focus{border-color:#0084ff}
-    #join-btn{
-      width:100%;padding:13px;background:#0084ff;color:white;
-      border:none;border-radius:12px;font-size:16px;
-      font-weight:600;cursor:pointer
-    }
-    #join-btn:hover{background:#006fd6}
-    #join-err{font-size:12px;color:#f44;margin-top:8px;min-height:16px}
+    /* ════ ADMIN MODAL ════ */
+    #admin-modal{ display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:9999; align-items:center; justify-content:center; }
+    .admin-box{ background:white; width:500px; border-radius:12px; padding:24px; max-height:80vh; overflow-y:auto; box-shadow:0 10px 30px rgba(0,0,0,0.3); }
+    .admin-box h2{ margin-bottom:16px; border-bottom:1px solid #eee; padding-bottom:10px; font-size:20px; }
+    .admin-table{ width:100%; text-align:left; border-collapse:collapse; font-size:14px; }
+    .admin-table th{ padding:12px 10px; border-bottom:2px solid #ddd; background:#f9f9f9; }
+    .admin-table td{ padding:12px 10px; border-bottom:1px solid #eee; }
+    .btn-upgrade{ padding:6px 12px; border:none; background:#0084ff; color:white; border-radius:6px; cursor:pointer; font-weight:600;}
+    .btn-downgrade{ padding:6px 12px; border:none; background:#f44336; color:white; border-radius:6px; cursor:pointer; font-weight:600;}
   </style>
 </head>
 <body>
+<div id="auth-screen">
+  <div id="auth-box">
+    <div class="logo">💬</div>
+    <h1>Chat App</h1>
+    <p class="sub" id="auth-sub">Đăng nhập để bắt đầu</p>
 
-<!-- ── Join Screen ── -->
-<div id="join-screen">
-  <div id="join-box">
-    <h2>💬 Chat App</h2>
-    <p>Nhập tên để bắt đầu</p>
-    <input id="username-input" placeholder="Tên của bạn..."/>
-    <button id="join-btn">Vào chat →</button>
-    <div id="join-err"></div>
+    <div id="auth-methods">
+      <button class="btn-method" id="btn-show-email">📧 Đăng nhập bằng Email</button>
+      <button class="btn-method" id="btn-google">
+        <svg class="google-icon" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
+        Đăng nhập với Google
+      </button>
+      <button class="btn-method" id="btn-show-phone">📱 Đăng nhập bằng Số điện thoại</button>
+    </div>
+
+    <div id="email-step" style="display:none;">
+      <input class="auth-input" id="email-input" type="email" placeholder="Email của bạn" style="margin-bottom:10px; width:100%;"/>
+      <input class="auth-input" id="password-input" type="password" placeholder="Mật khẩu (ít nhất 6 ký tự)" style="margin-bottom:16px; width:100%;"/>
+      <button class="btn-primary" id="btn-submit-email">Đăng nhập</button>
+      <div style="margin-top:12px; font-size:13px; color:#555;">
+        <span id="email-toggle-text">Chưa có tài khoản?</span> 
+        <a href="#" id="btn-toggle-email" style="color:#0084ff; font-weight:bold; text-decoration:none;">Đăng ký ngay</a>
+      </div>
+      <button class="btn-back" onclick="showAuthMethods()">← Quay lại</button>
+    </div>
+
+    <div id="phone-step" style="display:none;">
+      <div id="step-phone">
+        <div class="phone-input-wrap">
+          <div class="country-code">🇻🇳 +84</div>
+          <input class="auth-input" id="phone-input" type="tel" placeholder="909 000 001"/>
+        </div>
+        <div id="recaptcha-container"></div>
+        <button class="btn-primary" id="btn-send-otp">Gửi mã OTP</button>
+      </div>
+      <div id="step-otp" style="display:none">
+        <input class="auth-input" id="otp-input" type="text" placeholder="Nhập mã 6 số" maxlength="6" style="margin-bottom:10px;width:100%;text-align:center;font-size:22px;letter-spacing:8px"/>
+        <button class="btn-primary" id="btn-verify-otp">Xác nhận</button>
+        <button class="btn-back" id="btn-back-phone">← Đổi số</button>
+      </div>
+      <button class="btn-back" onclick="showAuthMethods()">← Quay lại</button>
+    </div>
+
+    <div id="username-step" style="display:none;">
+      <h3 style="margin-bottom:16px; font-size:16px; color:#111;">Chọn Avatar & Tên của bạn</h3>
+      <div class="avatar-grid" id="avatar-grid"></div>
+      <input class="auth-input" id="username-input" type="text" placeholder="Ví dụ: duc_kien_99" style="margin-bottom:16px; width:100%; text-align:center; font-weight:bold;"/>
+      <button class="btn-primary" id="btn-confirm-username">Vào phòng Chat</button>
+    </div>
+
+    <div id="auth-loading"><div class="spinner"></div><span id="loading-text">Đang xử lý...</span></div>
+    <div id="auth-err"></div>
   </div>
 </div>
 
-<!-- ── Sidebar ── -->
-<div id="sidebar">
-  <div id="sidebar-header">
-    <h2>Chat App</h2>
-    <div id="my-name-display"></div>
-  </div>
-  <div id="sidebar-body">
-    <div class="section-label">Kênh</div>
-    <div class="group-item active" id="group-tab" onclick="switchToGroup()">
-      <div class="group-icon">👥</div>
-      <span>Phòng chat chung</span>
-    </div>
-    <div class="section-label">Online (<span id="online-count">0</span>)</div>
-    <div id="user-list"></div>
+<div id="admin-modal">
+  <div class="admin-box">
+     <h2>👑 Quản trị Người dùng</h2>
+     <table class="admin-table">
+        <thead>
+           <tr><th>Người dùng</th><th>Quyền hiện tại</th><th>Hành động</th></tr>
+        </thead>
+        <tbody id="admin-user-list"></tbody>
+     </table>
+     <button onclick="$('admin-modal').style.display='none'" class="btn-primary" style="margin-top:20px;">Đóng bảng điều khiển</button>
   </div>
 </div>
 
-<!-- ── Main ── -->
-<div id="main">
-  <div id="chat-header">
-    <div class="avatar-lg group" id="header-avatar">👥</div>
-    <div id="header-info">
-      <h3 id="header-name">Phòng chat chung</h3>
-      <span id="header-sub">Chat nhóm</span>
+<div id="app">
+  <div id="sidebar">
+    <div id="sidebar-header">
+      <div class="my-avatar" id="my-avatar-el"></div>
+      <div class="my-info">
+        <div class="name" id="my-name-el"></div>
+        <div class="status">● Online</div>
+      </div>
+      <button id="btn-admin" title="Bảng quản trị Admin">👑</button>
+      <button id="btn-logout" title="Đăng xuất">⏻</button>
     </div>
-    <div id="status-dot"></div>
+    <div id="sidebar-body">
+      <div class="section-label">Kênh</div>
+      <div class="group-item active" id="group-tab" onclick="switchToGroup()">
+        <div class="group-icon">👥</div><span>Phòng chat chung</span>
+      </div>
+      <div class="group-item" id="channel-tab" onclick="switchToChannel()">
+        <div class="group-icon" style="background:#f39c12">📢</div><span>Kênh Thông Báo</span>
+      </div>
+      
+      <div class="section-label">Online (<span id="online-count">0</span>)</div>
+      <div id="user-list"></div>
+    </div>
   </div>
-  <div id="messages"></div>
-  <div id="input-area">
-    <input id="msg-input" placeholder="Nhập tin nhắn..." disabled/>
-    <button id="send-btn" disabled>➤</button>
+  <div id="main">
+    <div id="chat-header">
+      <div id="header-avatar">👥</div>
+      <div id="header-info">
+        <h3 id="header-name">Phòng chat chung</h3>
+        <span id="header-sub">Chat nhóm</span>
+      </div>
+      <div id="status-dot"></div>
+    </div>
+    <div id="messages"></div>
+    <div id="input-area">
+      <button id="btn-image" title="Gửi hình ảnh">📷</button>
+      <input id="msg-input" placeholder="Nhập tin nhắn..."/>
+      <button id="send-btn">➤</button>
+    </div>
   </div>
 </div>
 
 <script>
-const socket = io('http://localhost:3001', { transports: ['websocket','polling'] })
+// ⚠️ QUAN TRỌNG: ĐỪNG QUÊN ĐỔI LẠI MÃ NÀY THÀNH API KEY THẬT CỦA BẠN!
+var firebaseConfig = {
+  apiKey: "AIzaSyCpceaN6NCYjF8aBSnAr2oorcc9WpveyoA",
+  authDomain: "chat-app-demo-7d5c8.firebaseapp.com",
+  projectId: "chat-app-demo-7d5c8",
+  storageBucket: "chat-app-demo-7d5c8.firebasestorage.app",
+  messagingSenderId: "447306601552",
+  appId: "1:447306601552:web:28000eeffeb3f2c604ad55",
+  measurementId: "G-4H8DG0RD4X"
+};
 
-// ── State ──
-let myName = ''
-let currentChat = { type: 'group', target: null } // type: 'group' | 'private'
-let unread = {}      // { username: count }
-let privateHistory = {} // { roomId: [msgs] } — cache trong RAM
+firebase.initializeApp(firebaseConfig);
+var auth = firebase.auth();
+auth.languageCode = 'vi';
 
-// ── DOM helpers ──
-const $ = id => document.getElementById(id)
-const msgContainer = $('messages')
+const socket = io('http://localhost:3001', { transports: ['websocket','polling'], autoConnect: false });
+let myName = '', myPhoto = '', myUid = '', myRole = 'user'; // Thêm biến myRole
+let currentChat = { type: 'group', target: null };
+let unread = {}, privateHistory = {};
+let confirmationResult = null;
+const $ = id => document.getElementById(id);
+const msgContainer = $('messages'), authScreen = $('auth-screen'), appEl = $('app');
 
-// ════════════════════════════════
-// KẾT NỐI
-// ════════════════════════════════
-socket.on('connect', () => {
-  $('status-dot').classList.add('on')
-})
-socket.on('disconnect', () => {
-  $('status-dot').classList.remove('on')
-})
+// ════════ QUẢN LÝ AUTH & UI (Giữ nguyên như bản chuẩn nhất của bạn) ════════
+function hideAllAuth() { $('auth-methods').style.display='none'; $('email-step').style.display='none'; $('phone-step').style.display='none'; $('username-step').style.display='none'; $('auth-err').textContent=''; }
+function showAuthMethods() { hideAllAuth(); $('auth-methods').style.display='block'; $('auth-sub').textContent='Đăng nhập để bắt đầu'; if($('email-input')) $('email-input').value=''; if($('password-input')) $('password-input').value=''; if($('phone-input')) $('phone-input').value=''; if($('otp-input')) $('otp-input').value=''; if($('username-input')) $('username-input').value=''; }
 
-// ════════════════════════════════
-// JOIN
-// ════════════════════════════════
-function joinChat() {
-  const name = $('username-input').value.trim()
-  if (!name) { $('join-err').textContent = '⚠️ Nhập tên đi!'; return }
-  if (!socket.connected) { $('join-err').textContent = '❌ Chưa kết nối server'; return }
+const avatars = ['https://api.dicebear.com/7.x/adventurer/svg?seed=Felix','https://api.dicebear.com/7.x/adventurer/svg?seed=Annie','https://api.dicebear.com/7.x/adventurer/svg?seed=Max','https://api.dicebear.com/7.x/adventurer/svg?seed=Luna','https://api.dicebear.com/7.x/adventurer/svg?seed=Charlie','https://api.dicebear.com/7.x/adventurer/svg?seed=Chloe'];
+let selectedAvatar = avatars[0];
+$('avatar-grid').innerHTML = avatars.map((url, i) => `<img src="${url}" class="avatar-opt ${i===0?'selected':''}" onclick="selectAvatar(this, '${url}')">`).join('');
+function selectAvatar(el, url) { document.querySelectorAll('.avatar-opt').forEach(img=>img.classList.remove('selected')); el.classList.add('selected'); selectedAvatar=url; }
 
-  myName = name
-  $('my-name-display').textContent = '👤 ' + name
-  socket.emit('user:join', name)
+auth.onAuthStateChanged(user => {
+  if (user) {
+    if (user.displayName) { myUid=user.uid; myName=user.displayName; myPhoto=user.photoURL||''; enterApp(); } 
+    else { hideAllAuth(); hideLoading(); $('username-step').style.display='block'; $('auth-sub').textContent='Hoàn tất hồ sơ'; }
+  } else { showAuth(); showAuthMethods(); }
+});
 
-  $('join-screen').style.display = 'none'
-  $('msg-input').disabled = false
-  $('send-btn').disabled = false
+$('btn-confirm-username').onclick = async () => {
+  const val = $('username-input').value.trim();
+  if(val.length<3){showErr('Tên >= 3 ký tự!');return;}
+  showLoading('Đang lưu hồ sơ...');
+  try { await auth.currentUser.updateProfile({displayName:val,photoURL:selectedAvatar}); myUid=auth.currentUser.uid; myName=val; myPhoto=selectedAvatar; enterApp(); } 
+  catch(e){hideLoading();showErr(e.message);}
+};
 
-  // Load lịch sử group
-  loadGroupHistory()
+let isEmailLogin=true;
+$('btn-show-email').onclick=()=>{hideAllAuth();$('email-step').style.display='block';};
+$('btn-toggle-email').onclick=(e)=>{e.preventDefault();isEmailLogin=!isEmailLogin;$('btn-submit-email').textContent=isEmailLogin?'Đăng nhập':'Đăng ký';$('email-toggle-text').textContent=isEmailLogin?'Chưa có tài khoản?':'Đã có tài khoản?';$('btn-toggle-email').textContent=isEmailLogin?'Đăng ký':'Đăng nhập';$('auth-err').textContent='';};
+$('btn-submit-email').onclick=async()=>{const e=$('email-input').value.trim(),p=$('password-input').value.trim();if(!e||p.length<6){showErr('Lỗi Email/Pass');return;} showLoading('Đang xử lý...');try{if(isEmailLogin)await auth.signInWithEmailAndPassword(e,p);else await auth.createUserWithEmailAndPassword(e,p);}catch(err){hideLoading();showErr(err.message);}};
+$('btn-google').onclick=async()=>{showLoading('Đang mở Google...');try{const provider=new firebase.auth.GoogleAuthProvider();await auth.signInWithPopup(provider);}catch(err){hideLoading();showErr(err.message);}};
+$('btn-show-phone').onclick=()=>{hideAllAuth();$('phone-step').style.display='block';};
+let recaptchaVerifier=null;
+function setupRecaptcha(){if(recaptchaVerifier)return;recaptchaVerifier=new firebase.auth.RecaptchaVerifier('recaptcha-container',{size:'normal',callback:()=>{$('btn-send-otp').disabled=false},'expired-callback':()=>{$('btn-send-otp').disabled=true}});recaptchaVerifier.render();}
+$('btn-send-otp').onclick=async()=>{const phone='+84'+$('phone-input').value.trim().replace(/^0/,'').replace(/\s/g,'');if(phone.length<10){showErr('SĐT không hợp lệ');return;}setupRecaptcha();showLoading('Đang gửi OTP...');showErr('');try{confirmationResult=await auth.signInWithPhoneNumber(phone,recaptchaVerifier);hideLoading();$('step-phone').style.display='none';$('step-otp').style.display='block';$('otp-input').focus();}catch(e){hideLoading();showErr(e.message);if(recaptchaVerifier){recaptchaVerifier.clear();recaptchaVerifier=null;$('recaptcha-container').innerHTML='';}}};
+$('btn-verify-otp').onclick=async()=>{const code=$('otp-input').value.trim();if(code.length!==6){showErr('Nhập đủ 6 số');return;}showLoading('Đang xác nhận...');try{await confirmationResult.confirm(code);}catch(e){hideLoading();showErr('Mã sai');}};
+$('btn-back-phone').onclick=()=>{ $('step-otp').style.display='none';$('step-phone').style.display='block';$('otp-input').value='';showErr('');if(recaptchaVerifier){recaptchaVerifier.clear();recaptchaVerifier=null;$('recaptcha-container').innerHTML='';} };
+$('btn-logout').onclick=async()=>{socket.disconnect();await auth.signOut();};
+
+// ════════ APP LOGIC & SOCKET ════════
+function enterApp() {
+  $('my-name-el').textContent = myName;
+  $('my-avatar-el').innerHTML = myPhoto ? `<img src="${myPhoto}">` : myName.slice(0,2).toUpperCase();
+  authScreen.style.display = 'none'; appEl.classList.add('visible');
+  socket.connect();
+  socket.once('connect', () => {
+    $('status-dot').classList.add('on');
+    socket.emit('user:join', { name: myName, photo: myPhoto, uid: myUid });
+    socket.emit('channel:join'); // Vào room channel để nhận tin realtime
+    loadGroupHistory();
+  });
+  socket.on('disconnect', () => $('status-dot').classList.remove('on'));
 }
-$('join-btn').onclick = joinChat
-$('username-input').onkeydown = e => e.key === 'Enter' && joinChat()
-setTimeout(() => $('username-input').focus(), 100)
+function showAuth() { authScreen.style.display = 'flex'; appEl.classList.remove('visible'); hideLoading(); }
 
-// ════════════════════════════════
-// DANH SÁCH ONLINE
-// ════════════════════════════════
+// NHẬN QUYỀN ADMIN TỪ SERVER
+socket.on('auth:role', (role) => {
+  myRole = role;
+  $('btn-admin').style.display = (role === 'admin') ? 'block' : 'none'; // Hiện/ẩn nút Vương miện
+  updateInputUI(); // Cập nhật lại thanh chat
+});
+
 socket.on('user:list', (users) => {
-  $('online-count').textContent = users.length
-  const others = users.filter(u => u !== myName)
+  $('online-count').textContent = users.length;
+  const others = users.filter(u => u.uid !== myUid);
   $('user-list').innerHTML = others.map(u => {
-    const initials = u.slice(0,2).toUpperCase()
-    const cnt = unread[u] || 0
-    const isActive = currentChat.type === 'private' && currentChat.target === u
-    return `
-      <div class="user-item ${isActive ? 'active' : ''}" onclick="openPrivateChat('${u}')">
-        <div class="avatar">${initials}</div>
-        <span class="uname">${u}</span>
-        ${cnt > 0 && !isActive ? `<span class="badge">${cnt}</span>` : ''}
-      </div>`
-  }).join('')
-})
+    const isActive = currentChat.type === 'private' && currentChat.target === u.name;
+    const cnt = unread[u.name] || 0;
+    const avatarHtml = u.photo ? `<div class="avatar"><img src="${u.photo}"/></div>` : `<div class="avatar">${u.name.slice(0,2).toUpperCase()}</div>`;
+    return `<div class="user-item ${isActive?'active':''}" onclick="openPrivateChat('${esc(u.name)}','${esc(u.photo||'')}')">${avatarHtml} <span class="uname">${esc(u.name)}</span> ${cnt>0&&!isActive?`<span class="badge">${cnt}</span>`:''}</div>`;
+  }).join('');
+});
 
-// ════════════════════════════════
-// GROUP CHAT
-// ════════════════════════════════
-async function loadGroupHistory() {
-  try {
-    const res = await fetch('http://localhost:3001/history/group')
-    const msgs = await res.json()
-    msgs.forEach(m => renderMsg(m.from, m.text, m.time))
-    if (msgs.length) addSysMsg(`— ${msgs.length} tin nhắn cũ —`)
-  } catch {}
+// ════════ BẢNG ĐIỀU KHIỂN ADMIN ════════
+$('btn-admin').onclick = () => {
+  $('admin-modal').style.display = 'flex';
+  socket.emit('admin:getUsers'); // Xin data từ server
+};
+
+socket.on('admin:userList', (users) => {
+  $('admin-user-list').innerHTML = users.map(u => `
+    <tr>
+      <td><div style="display:flex;align-items:center;gap:8px;font-weight:600;">
+        ${u.photo ? `<img src="${u.photo}" style="width:28px;height:28px;border-radius:50%">` : ''} ${esc(u.name)}
+      </div></td>
+      <td><span style="background:${u.role==='admin'?'#f39c12':'#e0e0e0'}; color:${u.role==='admin'?'white':'#333'}; padding:4px 10px; border-radius:12px; font-size:12px; font-weight:bold;">${u.role}</span></td>
+      <td>
+        ${u.uid === myUid ? '<span style="color:#aaa;font-size:13px;">(Là bạn)</span>' : `
+          <button onclick="toggleRole('${u.uid}', '${u.role}')" class="${u.role==='admin'?'btn-downgrade':'btn-upgrade'}">
+             ${u.role === 'admin' ? '↓ Hạ xuống User' : '↑ Lên Admin'}
+          </button>
+        `}
+      </td>
+    </tr>
+  `).join('');
+});
+
+function toggleRole(uid, currentRole) {
+  const newRole = currentRole === 'admin' ? 'user' : 'admin';
+  socket.emit('admin:setRole', { targetUid: uid, newRole });
 }
 
-socket.on('message:receive', (msg) => {
-  if (currentChat.type === 'group') {
-    renderMsg(msg.from, msg.text, msg.time)
-  }
-  // Nếu đang ở private chat thì không hiện group msg
-})
-
-function sendGroupMsg() {
-  const text = $('msg-input').value.trim()
-  if (!text || !myName) return
-  socket.emit('message:send', { from: myName, text })
-  $('msg-input').value = ''
-}
-
-// ════════════════════════════════
-// PRIVATE CHAT 1:1
-// ════════════════════════════════
-function openPrivateChat(targetName) {
-  currentChat = { type: 'private', target: targetName }
-
-  // Cập nhật header
-  const initials = targetName.slice(0,2).toUpperCase()
-  $('header-avatar').textContent = initials
-  $('header-avatar').classList.remove('group')
-  $('header-name').textContent = targetName
-  $('header-sub').textContent = 'Tin nhắn riêng'
-
-  // Xoá unread badge
-  unread[targetName] = 0
-  refreshUserList()
-
-  // Xoá màn hình messages
-  msgContainer.innerHTML = ''
-
-  // Join room và lấy lịch sử
-  const roomId = privateRoomId(myName, targetName)
-  if (privateHistory[roomId]) {
-    // Đã có cache → render luôn
-    privateHistory[roomId].forEach(m => renderMsg(m.from, m.text, m.time))
-    if (privateHistory[roomId].length) addSysMsg('— Tin nhắn cũ —')
-  }
-  socket.emit('private:join', { myName, targetName })
-
-  // Đánh dấu active trên sidebar
-  refreshUserList()
-  $('group-tab').classList.remove('active')
-  $('msg-input').placeholder = `Nhắn tin cho ${targetName}...`
-}
-
-// Nhận lịch sử private từ server
-socket.on('private:history', ({ roomId, history }) => {
-  privateHistory[roomId] = history
-  // Chỉ render nếu đang mở đúng room này
-  const activeRoom = privateRoomId(myName, currentChat.target)
-  if (roomId === activeRoom) {
-    msgContainer.innerHTML = ''
-    history.forEach(m => renderMsg(m.from, m.text, m.time))
-    if (history.length) addSysMsg('— Tin nhắn cũ —')
-  }
-})
-
-// Nhận tin nhắn private
-socket.on('private:receive', ({ roomId, msg }) => {
-  // Cache
-  if (!privateHistory[roomId]) privateHistory[roomId] = []
-  privateHistory[roomId].push(msg)
-
-  const activeRoom = privateRoomId(myName, currentChat.target || '')
-  if (currentChat.type === 'private' && roomId === activeRoom) {
-    // Đang xem đúng room → render
-    renderMsg(msg.from, msg.text, msg.time)
+// ════════ CHUYỂN ĐỔI CHAT & KHÓA MÕM ════════
+function updateInputUI() {
+  const inp = $('msg-input'), btn = $('send-btn'), imgBtn = $('btn-image');
+  // Nếu đang ở Kênh 1:N và KHÔNG phải admin -> Khóa chat
+  if (currentChat.type === 'channel' && myRole !== 'admin') {
+    inp.disabled = true;
+    inp.placeholder = "🔒 Chỉ Admin mới có quyền nhắn tin...";
+    inp.style.background = "#f0f2f5";
+    btn.style.display = 'none';
+    imgBtn.style.display = 'none';
   } else {
-    // Đang ở chỗ khác → tăng unread
-    const otherPerson = msg.from === myName ? msg.to : msg.from
-    if (otherPerson !== myName) {
-      unread[otherPerson] = (unread[otherPerson] || 0) + 1
-      refreshUserList()
-    }
+    // Ngược lại -> Mở khóa
+    inp.disabled = false;
+    inp.style.background = "white";
+    btn.style.display = 'block';
+    imgBtn.style.display = 'block';
+    if (currentChat.type === 'channel') inp.placeholder = "📢 Nhập thông báo cho mọi người...";
+    else if (currentChat.type === 'group') inp.placeholder = "Nhập tin nhắn chung...";
+    else inp.placeholder = `Nhắn cho ${currentChat.target}...`;
   }
-})
-
-function sendPrivateMsg() {
-  const text = $('msg-input').value.trim()
-  if (!text || !myName || !currentChat.target) return
-  socket.emit('private:message', { from: myName, to: currentChat.target, text })
-  $('msg-input').value = ''
 }
 
-// ════════════════════════════════
-// SWITCH GROUP / PRIVATE
-// ════════════════════════════════
+async function loadGroupHistory() {
+  try { const res = await fetch('http://localhost:3001/history/group'); const msgs = await res.json(); msgs.forEach(m => renderMsg(m)); if(msgs.length) addSysMsg('— Tin nhắn cũ —'); } catch {}
+}
 function switchToGroup() {
-  currentChat = { type: 'group', target: null }
-  $('header-avatar').textContent = '👥'
-  $('header-avatar').classList.add('group')
-  $('header-name').textContent = 'Phòng chat chung'
-  $('header-sub').textContent = 'Chat nhóm'
-  $('msg-input').placeholder = 'Nhập tin nhắn...'
-  $('group-tab').classList.add('active')
-  msgContainer.innerHTML = ''
-  loadGroupHistory()
-  refreshUserList()
+  currentChat = { type: 'group', target: null };
+  $('header-avatar').innerHTML = '👥'; $('header-avatar').style.background = '#6c3483';
+  $('header-name').textContent = 'Phòng chat chung'; $('header-sub').textContent = 'Mọi người đều có thể chat';
+  $('group-tab').classList.add('active'); $('channel-tab').classList.remove('active');
+  document.querySelectorAll('.user-item').forEach(el => el.classList.remove('active'));
+  msgContainer.innerHTML = ''; updateInputUI(); loadGroupHistory(); refreshBadges();
 }
 
-function refreshUserList() {
-  // Re-trigger user:list render bằng cách fake-emit qua state hiện tại
-  const items = document.querySelectorAll('.user-item')
-  items.forEach(el => {
-    const onclick = el.getAttribute('onclick')
-    const name = onclick.match(/'([^']+)'/)?.[1]
-    if (!name) return
-    const isActive = currentChat.type === 'private' && currentChat.target === name
-    el.classList.toggle('active', isActive)
-    if (isActive) $('group-tab').classList.remove('active')
-    const badge = el.querySelector('.badge')
-    const cnt = unread[name] || 0
-    if (cnt > 0 && !isActive) {
-      if (badge) badge.textContent = cnt
-      else el.insertAdjacentHTML('beforeend', `<span class="badge">${cnt}</span>`)
-    } else if (badge) badge.remove()
-  })
+async function switchToChannel() {
+  currentChat = { type: 'channel', target: null };
+  $('header-avatar').innerHTML = '📢'; $('header-avatar').style.background = '#f39c12';
+  $('header-name').textContent = 'Kênh Thông Báo'; $('header-sub').textContent = 'Chỉ Admin mới có thể gửi tin';
+  $('channel-tab').classList.add('active'); $('group-tab').classList.remove('active');
+  document.querySelectorAll('.user-item').forEach(el => el.classList.remove('active'));
+  msgContainer.innerHTML = ''; updateInputUI(); refreshBadges();
+  // Tải lịch sử Kênh
+  try { const res = await fetch('http://localhost:3001/history/channel'); const msgs = await res.json(); msgs.forEach(m => renderMsg(m)); if(msgs.length) addSysMsg('— Tin cũ Kênh Thông Báo —'); } catch {}
 }
 
-// ════════════════════════════════
-// GỬI TIN — dùng chung
-// ════════════════════════════════
+function openPrivateChat(targetName, targetPhoto) {
+  currentChat = { type: 'private', target: targetName, targetPhoto };
+  $('header-avatar').innerHTML = targetPhoto ? `<img src="${targetPhoto}">` : targetName.slice(0,2).toUpperCase(); $('header-avatar').style.background = targetPhoto ? 'transparent' : '#0084ff';
+  $('header-name').textContent = targetName; $('header-sub').textContent = 'Tin nhắn riêng';
+  unread[targetName] = 0; msgContainer.innerHTML = '';
+  const roomId = privRoom(myName, targetName);
+  if (privateHistory[roomId]) { privateHistory[roomId].forEach(m => renderMsg(m)); if(privateHistory[roomId].length) addSysMsg('— Tin cũ —'); }
+  socket.emit('private:join', { myName, targetName });
+  $('group-tab').classList.remove('active'); $('channel-tab').classList.remove('active');
+  updateInputUI(); refreshBadges();
+}
+
+// ════════ GỬI & NHẬN TIN NHẮN ════════
+socket.on('message:receive', (msg) => { if (currentChat.type === 'group') renderMsg(msg); });
+socket.on('channel:receive', (msg) => { if (currentChat.type === 'channel') renderMsg(msg); });
+
+socket.on('private:history', ({ roomId, history }) => {
+  privateHistory[roomId] = history;
+  if (currentChat.type === 'private' && roomId === privRoom(myName, currentChat.target)) { msgContainer.innerHTML=''; history.forEach(m=>renderMsg(m)); if(history.length)addSysMsg('— Tin cũ —'); }
+});
+socket.on('private:receive', ({ roomId, msg }) => {
+  if (!privateHistory[roomId]) privateHistory[roomId] = []; privateHistory[roomId].push(msg);
+  if (currentChat.type === 'private' && roomId === privRoom(myName, currentChat.target||'')) renderMsg(msg);
+  else { const other = msg.from===myName?msg.to:msg.from; unread[other] = (unread[other]||0)+1; refreshBadges(); }
+});
+
 function sendMessage() {
-  if (currentChat.type === 'group') sendGroupMsg()
-  else sendPrivateMsg()
+  const text = $('msg-input').value.trim(); if (!text) return;
+  if (currentChat.type === 'group') socket.emit('message:send', { from: myName, photo: myPhoto, text });
+  else if (currentChat.type === 'channel') socket.emit('channel:message', { from: myName, photo: myPhoto, text });
+  else socket.emit('private:message', { from: myName, to: currentChat.target, photo: myPhoto, text });
+  $('msg-input').value = '';
 }
-$('send-btn').onclick = sendMessage
-$('msg-input').onkeydown = e => e.key === 'Enter' && sendMessage()
+$('send-btn').onclick = sendMessage;
+$('msg-input').onkeydown = (e) => { if (e.key === 'Enter') sendMessage(); }
 
-// ════════════════════════════════
-// RENDER TIN NHẮN
-// ════════════════════════════════
-function renderMsg(from, text, time) {
-  const isMe = from === myName
-  const wrap = document.createElement('div')
-  wrap.className = `msg-wrap ${isMe ? 'me' : 'other'}`
-  wrap.innerHTML = `
-    ${!isMe ? `<div class="msg-name">${from}</div>` : ''}
-    <div class="msg-bubble">${esc(text)}</div>
-    <div class="msg-time">${time}</div>
-  `
-  msgContainer.appendChild(wrap)
-  msgContainer.scrollTop = msgContainer.scrollHeight
+function refreshBadges() {
+  document.querySelectorAll('.user-item').forEach(el => {
+    const fn=el.getAttribute('onclick')||''; const m=fn.match(/'([^']+)'/); if(!m) return;
+    const name=m[1]; const isActive = currentChat.type==='private'&&currentChat.target===name;
+    el.classList.toggle('active', isActive);
+    const old=el.querySelector('.badge'); const cnt=unread[name]||0;
+    if(cnt>0&&!isActive){ if(old)old.textContent=cnt; else el.insertAdjacentHTML('beforeend', `<span class="badge">${cnt}</span>`); } else if(old)old.remove();
+  });
 }
 
-function addSysMsg(text) {
-  const el = document.createElement('div')
-  el.className = 'sys-msg'
-  el.textContent = text
-  msgContainer.appendChild(el)
-  msgContainer.scrollTop = msgContainer.scrollHeight
+function renderMsg(msg) {
+  const isMe = msg.from === myName; const wrap = document.createElement('div'); wrap.className = `msg-wrap ${isMe?'me':'other'}`;
+  const avatarHtml = msg.photo ? `<div class="sm-avatar"><img src="${msg.photo}"/></div>` : `<div class="sm-avatar">${(msg.from||'?').slice(0,2).toUpperCase()}</div>`;
+  wrap.innerHTML = `${!isMe ? `<div class="msg-sender">${avatarHtml}<span class="msg-name">${esc(msg.from)}</span></div>`:''} <div class="msg-bubble">${esc(msg.text)}</div> <div class="msg-time">${msg.time}</div>`;
+  msgContainer.appendChild(wrap); msgContainer.scrollTop = msgContainer.scrollHeight;
 }
-
-function privateRoomId(a, b) {
-  return [a, b].sort().join('__')
-}
-
-function esc(t) {
-  return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
-}
+function addSysMsg(text) { const el=document.createElement('div'); el.className='sys-msg'; el.textContent=text; msgContainer.appendChild(el); }
+function privRoom(a, b) { return [a, b].sort().join('__'); }
+function esc(t) { return String(t||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function showLoading(msg) { $('auth-loading').style.display='flex'; $('loading-text').textContent=msg; }
+function hideLoading() { $('auth-loading').style.display='none'; }
+function showErr(msg) { $('auth-err').textContent=msg; }
 </script>
 </body>
 </html>

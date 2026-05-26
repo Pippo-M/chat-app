@@ -1,1 +1,21 @@
-{}
+{
+  "group": [
+    {
+      "from": "Minh dz vãi",
+      "photo": "https://api.dicebear.com/7.x/adventurer/svg?seed=Chloe",
+      "text": "asdasd",
+      "time": "13:30:39",
+      "ts": 1779777039290
+    }
+  ],
+  "Minh Vũ__Minh Vũ": [
+    {
+      "from": "Minh Vũ",
+      "to": "Minh Vũ",
+      "photo": "https://lh3.googleusercontent.com/a/ACg8ocIV7zr90mKxwVrd8traio6yAICiTp27p6ktXDyqIqMzR8AcoA=s96-c",
+      "text": "abc",
+      "time": "13:31:45",
+      "ts": 1779777105352
+    }
+  ]
+}
